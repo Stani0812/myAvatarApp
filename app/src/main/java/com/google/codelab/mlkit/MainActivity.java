@@ -14,15 +14,18 @@
 
 package com.google.codelab.mlkit;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.hardware.SensorListener;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.os.PowerManager;
 import android.util.Pair;
 import android.view.View;
 import android.widget.AdapterView;
@@ -45,12 +48,20 @@ import com.google.mlkit.vision.text.TextRecognizer;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 
-public class MainActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+//import android.support.v7.app.AppCompatActivity;
+import android.widget.TextView;
+
+public class MainActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener,SensorEventListener {
     private static final String TAG = "MainActivity";
     private ImageView mImageView;
     private Button mTextButton;
@@ -61,6 +72,15 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private Integer mImageMaxWidth;
     // Max height (portrait mode)
     private Integer mImageMaxHeight;
+
+    private SensorManager mSensorManagerP, mSensorManagerA, mSensorManagerG;
+
+    private Sensor mProximity, mAccelerometer, mGyroScope;
+
+    private TextView mAccelerometerInfo, mProximityInfo, mGyroScopeInfo;
+
+    private PowerManager mPowerManager;
+    private PowerManager.WakeLock mWakeLock;
 
     /**
      * Number of results to show in the UI.
@@ -87,6 +107,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     /* Preallocated buffers for storing image data. */
     private final int[] intValues = new int[DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y];
 
+    @SuppressLint("InvalidWakeLockTag")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -96,6 +117,20 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
         mTextButton = findViewById(R.id.button_text);
         mFaceButton = findViewById(R.id.button_face);
+
+        mSensorManagerP = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mSensorManagerA = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mSensorManagerG = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mProximity = mSensorManagerP.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+        mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mGyroScope = mSensorManagerG.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+
+        mProximityInfo = findViewById(R.id.text_pro);
+        mAccelerometerInfo = findViewById(R.id.text_acc);
+        mGyroScopeInfo = findViewById(R.id.text_gyro);
+
+        mPowerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        mWakeLock = mPowerManager.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "WakeLock");
 
         mGraphicOverlay = findViewById(R.id.graphic_overlay);
         mTextButton.setOnClickListener(new View.OnClickListener() {
@@ -308,5 +343,49 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
 
         return bitmap;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        mSensorManagerP.registerListener((SensorEventListener) this, mProximity, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManagerA.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManagerG.registerListener((SensorEventListener) this, mGyroScope, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mSensorManagerP.unregisterListener((SensorListener) this);
+        mSensorManagerA.unregisterListener((SensorListener) this);
+        mSensorManagerG.unregisterListener((SensorListener) this);
+    }
+
+    //@Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
+            if (event.values[0] > 2.0) {
+                mProximityInfo.setText("PRO: far");
+                if (mWakeLock.isHeld()) {
+                    mWakeLock.release();
+                }
+            } else if (event.values[0] > 1.0) {
+                mProximityInfo.setText("PRO: near");
+                if (mWakeLock.isHeld()) {
+                    mWakeLock.release();
+                }
+            }else {
+                mWakeLock.acquire();
+            }
+        }else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            mAccelerometerInfo.setText("ACC: " + Arrays.toString(event.values));
+        }else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            mGyroScopeInfo.setText("GYRO: " + Arrays.toString(event.values));
+        }
+    }
+
+    //@Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
     }
 }
