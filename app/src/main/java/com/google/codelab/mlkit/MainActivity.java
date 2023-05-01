@@ -122,8 +122,8 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         mSensorManagerA = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerG = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mProximity = mSensorManagerP.getDefaultSensor(Sensor.TYPE_PROXIMITY);
-        mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mGyroScope = mSensorManagerG.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_ACCELEROMETER_UNCALIBRATED);
+        mGyroScope = mSensorManagerG.getDefaultSensor(Sensor.TYPE_GYROSCOPE_UNCALIBRATED);
 
         mProximityInfo = findViewById(R.id.text_pro);
         mAccelerometerInfo = findViewById(R.id.text_acc);
@@ -361,26 +361,34 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         mSensorManagerG.unregisterListener((SensorListener) this);
     }
 
+    private static String arrayToString( String str, float[] values )
+    {
+        for(float dv : values)
+        {
+            int iv = (int)(dv * 100.0f);
+            str += " " + (iv / 100) + "." + (iv % 100);
+        }
+        return str;
+    }
     //@Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
             if (event.values[0] > 2.0) {
-                mProximityInfo.setText("PRO: far");
-                if (mWakeLock.isHeld()) {
-                    mWakeLock.release();
-                }
+                mProximityInfo.setText("PRO: far" + Arrays.toString(event.values));
             } else if (event.values[0] > 1.0) {
                 mProximityInfo.setText("PRO: near");
                 if (mWakeLock.isHeld()) {
-                    mWakeLock.release();
+                    //mWakeLock.release();
                 }
             }else {
-                mWakeLock.acquire();
+                if (!mWakeLock.isHeld()) {
+                    //mWakeLock.acquire();
+                }
             }
-        }else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            mAccelerometerInfo.setText("ACC: " + Arrays.toString(event.values));
-        }else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
-            mGyroScopeInfo.setText("GYRO: " + Arrays.toString(event.values));
+        }else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER_UNCALIBRATED) {
+            mAccelerometerInfo.setText(arrayToString("ACC:", event.values));
+        }else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE_UNCALIBRATED) {
+            mGyroScopeInfo.setText(arrayToString("GYRO: ",event.values));
         }
     }
 
