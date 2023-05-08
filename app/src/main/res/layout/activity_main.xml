@@ -30,16 +30,17 @@
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/text_acc" />
+
     <ImageView
         android:id="@+id/image_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:contentDescription="@string/select_image_for_text_recognition"
         android:scaleType="fitStart"
-        app:layout_constraintTop_toBottomOf="parent"
         app:layout_constraintBottom_toTopOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        android:contentDescription="@string/select_image_for_text_recognition" />
+        app:layout_constraintTop_toBottomOf="parent" />
 
     <com.google.codelab.mlkit.GraphicOverlay
         android:id="@+id/graphic_overlay"

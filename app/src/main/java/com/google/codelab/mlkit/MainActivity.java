@@ -21,6 +21,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.SensorListener;
 import android.os.Bundle;
+import android.view.Gravity;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -60,6 +61,36 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 //import android.support.v7.app.AppCompatActivity;
 import android.widget.TextView;
+
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.LifecycleOwner;
+
+import android.content.pm.PackageManager;
+import android.util.Log;
+import android.view.Surface;
+
+import com.google.common.util.concurrent.ListenableFuture;
+
+import org.opencv.android.Utils;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
+
+import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener,SensorEventListener {
     private static final String TAG = "MainActivity";
@@ -104,10 +135,13 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                             return (o1.getValue()).compareTo(o2.getValue());
                         }
                     });
-    /* Preallocated buffers for storing image data. */
+    /* Preallocate buffers for storing image data. */
     private final int[] intValues = new int[DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y];
 
-    @SuppressLint("InvalidWakeLockTag")
+    private int REQUEST_CODE_FOR_PERMISSIONS = 1234;;
+    private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
+
+    @SuppressLint({"InvalidWakeLockTag", "MissingInflatedId"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -121,6 +155,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         mSensorManagerP = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerA = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerG = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+
         mProximity = mSensorManagerP.getDefaultSensor(Sensor.TYPE_PROXIMITY);
         mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_ACCELEROMETER_UNCALIBRATED);
         mGyroScope = mSensorManagerG.getDefaultSensor(Sensor.TYPE_GYROSCOPE_UNCALIBRATED);
@@ -146,7 +181,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             }
         });
         Spinner dropdown = findViewById(R.id.spinner);
-        String[] items = new String[]{"Test Image 1 (Text)", "Test Image 2 (Face)"};
+        String[] items = new String[]{"Test Image 1 (Text)", "Test Image 2 (Face)", "Camera Image"};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout
                 .simple_spinner_dropdown_item, items);
         dropdown.setAdapter(adapter);
@@ -191,7 +226,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 for (int k = 0; k < elements.size(); k++) {
                     GraphicOverlay.Graphic textGraphic = new TextGraphic(mGraphicOverlay, elements.get(k));
                     mGraphicOverlay.add(textGraphic);
-
                 }
             }
         }
@@ -240,11 +274,20 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             FaceContourGraphic faceGraphic = new FaceContourGraphic(mGraphicOverlay);
             mGraphicOverlay.add(faceGraphic);
             faceGraphic.updateFace(face);
+            showToast("aaaa",
+                    face.getBoundingBox().centerX(),
+                    face.getBoundingBox().centerY());
         }
     }
 
     private void showToast(String message) {
-        Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
+        showToast(message,0,0);
+    }
+
+    private void showToast(String message, int posX, int posY) {
+        Toast t = Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT);
+        t.setGravity(Gravity.TOP|Gravity.LEFT, posX, posY);
+        t.show();
     }
 
     // Functions for loading images from app assets.
@@ -296,9 +339,14 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 mSelectedImage = getBitmapFromAsset(this, "Please_walk_on_the_grass.jpg");
                 break;
             case 1:
-                // Whatever you want to happen when the thrid item gets selected
+                // Whatever you want to happen when the third item gets selected
                 mSelectedImage = getBitmapFromAsset(this, "grace_hopper.jpg");
                 break;
+
+            case 2:
+                mSelectedImage = null;
+                break;
+
         }
         if (mSelectedImage != null) {
             // Get the dimensions of the View
@@ -361,8 +409,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         mSensorManagerG.unregisterListener((SensorListener) this);
     }
 
-    private static String arrayToString( String str, float[] values )
-    {
+    private static String arrayToString( String str, float[] values ) {
         for(float dv : values)
         {
             int iv = (int)(dv * 100.0f);
@@ -370,9 +417,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
         return str;
     }
-    //@Override
+    @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
+            //event.values[0]=0 or 5.000025.
             if (event.values[0] > 2.0) {
                 mProximityInfo.setText("PRO: far" + Arrays.toString(event.values));
             } else if (event.values[0] > 1.0) {
@@ -381,6 +429,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     //mWakeLock.release();
                 }
             }else {
+                mProximityInfo.setText("PRO: very near");
                 if (!mWakeLock.isHeld()) {
                     //mWakeLock.acquire();
                 }
