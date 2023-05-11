@@ -1,11 +1,11 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 28 //origin:28
+    compileSdkVersion 31 //origin:28
     defaultConfig {
         applicationId "com.google.codelab.mlkit"
         minSdkVersion 21
-        targetSdkVersion 28 //origin:28
+        targetSdkVersion 31 //origin:28
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -16,12 +16,15 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    packagingOptions {
-        exclude 'META-INF/androidx.exifinterface_exifinterface.version'
-    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+    packagingOptions {
+        exclude 'META-INF/androidx.exifinterface_exifinterface.version'
+    }
+    buildFeatures {
+        viewBinding true
     }
 }
 
@@ -42,11 +45,18 @@ dependencies {
     // Text features
     implementation 'com.google.android.gms:play-services-mlkit-text-recognition:16.0.0'
 
-    def camerax_version = "1.0.0-beta03"
+    //def camerax_version = "1.0.0-beta03"
     // CameraX core library using camera2 implementation
-    implementation "androidx.camera:camera-camera2:$camerax_version"
+    //implementation "androidx.camera:camera-camera2:$camerax_version"
     // CameraX Lifecycle Library
-    implementation "androidx.camera:camera-lifecycle:$camerax_version"
+    //implementation "androidx.camera:camera-lifecycle:$camerax_version"
     // CameraX View class
+    //implementation "androidx.camera:camera-view:1.0.0-alpha10"
+    def camerax_version = "1.1.0-beta01"
+    implementation "androidx.camera:camera-core:${camerax_version}"
+    implementation "androidx.camera:camera-camera2:${camerax_version}"
+    implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+    implementation "androidx.camera:camera-video:${camerax_version}"
     implementation "androidx.camera:camera-view:1.0.0-alpha10"
+    implementation "androidx.camera:camera-extensions:${camerax_version}"
 }
