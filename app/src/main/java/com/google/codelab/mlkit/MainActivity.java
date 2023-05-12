@@ -22,7 +22,12 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.YuvImage;
+import android.graphics.Rect;
 import android.hardware.SensorListener;
+import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
@@ -60,6 +65,7 @@ import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -83,7 +89,7 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
-import org.opencv.core.Rect;
+//import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
@@ -98,7 +104,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     };
     private ImageView mImageView;
     private PreviewView mPreviewView;
-    //private GraphicOverlay mGraphicOverlay;
+    private GraphicOverlay mGraphicOverlay;
     //private Bitmap mSelectedImage;
     //private Integer mImageMaxWidth, mImageMaxHeight;
     private SensorManager mSensorManagerP, mSensorManagerA, mSensorManagerO;
@@ -140,7 +146,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //mImageView.setScaleType(ImageView.ScaleType.CENTER);
         mPreviewView = findViewById(R.id.previewView);
         mPreviewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
-        //mGraphicOverlay = findViewById(R.id.graphicOverlay);
+        mGraphicOverlay = findViewById(R.id.graphicOverlay);
 
         mSensorManagerP = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerA = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -166,8 +172,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
-    /*private void runFaceContourDetection() {
-        InputImage image = InputImage.fromBitmap(mSelectedImage, 0);
+    private void faceContourDetection(@NonNull Bitmap bitMap) {
+        InputImage image = InputImage.fromBitmap(bitMap, 0);
+
         FaceDetectorOptions options =
                 new FaceDetectorOptions.Builder()
                         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -196,7 +203,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void processFaceContourDetectionResult(List<Face> faces) {
         // Task completed successfully
         if (faces.size() == 0) {
-            showToast("No face found");
+            //showToast("No face found");
             return;
         }
         mGraphicOverlay.clear();
@@ -206,7 +213,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             mGraphicOverlay.add(faceGraphic);
             faceGraphic.updateFace(face);
         }
-    }*/
+    }
 
     private void showToast(String message) {
         showToast(message,0,0);
@@ -368,13 +375,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
                     preview = new Preview.Builder().build();
                     imageAnalysis = new ImageAnalysis.Builder().build();
-                    imageAnalysis.setAnalyzer(cameraExecutor, new MyImageAnalyzer());
+                    imageAnalysis.setAnalyzer(cameraExecutor, new MyFaceImageAnalyzer());
                     CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build();
 
                     cameraProvider.unbindAll();
-                    camera = cameraProvider.bindToLifecycle((LifecycleOwner)context, cameraSelector, preview
-                                                            , imageAnalysis
-                                                            );
+                    camera = cameraProvider.bindToLifecycle((LifecycleOwner)context, cameraSelector, preview, imageAnalysis);
                     preview.setSurfaceProvider(mPreviewView.createSurfaceProvider(camera.getCameraInfo()));
                 } catch(Exception e) {
                     Log.e(TAG, "[startCamera] Use case binding failed", e);
@@ -383,7 +388,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }, ContextCompat.getMainExecutor(this));
     }
 
-    private class MyImageAnalyzer implements ImageAnalysis.Analyzer {
+    private class MyAbsImageAnalyzer implements ImageAnalysis.Analyzer {
         private Mat matPrevious = null;
 
         @Override
@@ -455,6 +460,120 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
             return mat;
         }
+    }
+
+    private class MyFaceImageAnalyzer implements ImageAnalysis.Analyzer {
+        @Override
+        public void analyze(@NonNull ImageProxy image) {
+            Bitmap bitMap = toBitmap(image);
+
+            faceContourDetection(bitMap);
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mImageView.setImageBitmap(bitMap);
+                    //mImageView.setImageResource();
+                }
+            });
+
+            image.close();
+        }
+
+        private Bitmap toBitmap(ImageProxy image) {
+            ImageProxy.PlaneProxy[] planes = image.getPlanes();
+            ByteBuffer yBuffer = planes[0].getBuffer();
+            ByteBuffer uBuffer = planes[1].getBuffer();
+            ByteBuffer vBuffer = planes[2].getBuffer();
+
+            int ySize = yBuffer.remaining();
+            int uSize = uBuffer.remaining();
+            int vSize = vBuffer.remaining();
+
+            byte[] nv21 = new byte[ySize + uSize + vSize];
+            //U and V are swapped
+            yBuffer.get(nv21, 0, ySize);
+            vBuffer.get(nv21, ySize, vSize);
+            uBuffer.get(nv21, ySize + vSize, uSize);
+
+            YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            yuvImage.compressToJpeg(new Rect(0, 0, yuvImage.getWidth(), yuvImage.getHeight()), 75, out);
+
+            byte[] imageBytes = out.toByteArray();
+            return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        }
+
+        /*private Bitmap YUV420_888toBitmap(ImageProxy image){
+            int w = image.getWidth();
+            int h = image.getHeight();
+
+            ImageProxy.PlaneProxy[] planes = image.getPlanes();
+
+            ImageProxy.PlaneProxy yplane = planes[0];
+            ImageProxy.PlaneProxy uplane = planes[1];
+            ImageProxy.PlaneProxy vplane = planes[2];
+
+            ByteBuffer ybuf = yplane.getBuffer();
+            ByteBuffer ubuf = uplane.getBuffer();
+            ByteBuffer vbuf = vplane.getBuffer();
+
+            int uvx = vplane.getPixelStride();
+            int uvw = vplane.getRowStride();
+
+            int[] bmp = new int[w * h];
+            int[] col = new int[(uvw / uvx) * 3];
+
+            int bp = 0;
+            for(int dy = 0;dy < h;++dy)
+            {
+                //4ピクセルブロック単位なので隔行、隔ピクセルで計算処理したものを4回使いまわす
+                if((dy & 1) == 0)
+                {
+                    int uvp = 0;
+                    int idx = uvw * (dy>>1);
+                    for(int dx = 0;dx < uvw;dx += uvx)
+                    {
+                        vbuf.position(idx + dx);
+                        ubuf.position(idx + dx);
+
+                        int v = vbuf.get();
+                        int u = ubuf.get();
+
+                        v = (v & 0xFF) - 128; //0xFFでANDしないと暗黙Intでなのか変な値になる。
+                        u = (u & 0xFF) - 128;
+
+                        col[uvp++] = (int)(1634 * v);
+                        col[uvp++] = -(int)((833 * v) + (400 * u));
+                        col[uvp++] = (int)(2066 * u);
+                    }
+                }
+
+                //輝度情報は全pixel分あるので、そこに上であらかじめ計算しているカラーを乗せてBitmap化していく
+                int p = 0;
+                for(int dx = 0;dx < w;++dx)
+                {
+                    int y = 1192 * ((ybuf.get() & 0xFF) - 16);
+
+                    int r = (y + col[p]);
+                    int g = (y + col[p+1]);
+                    int b = (y + col[p+2]);
+
+                    r = r < 0 ? 0 : r > 262143 ? 262143 : r;
+                    g = g < 0 ? 0 : g > 262143 ? 262143 : g;
+                    b = b < 0 ? 0 : b > 262143 ? 262143 : b;
+                    r >>= 10;
+                    g >>= 10;
+                    b >>= 10;
+
+                    bmp[bp++] = (0xFF000000 | ((r&0xFF)<<16) | ((g&0xFF)<<8) | ((b&0xFF)<<0));
+                    if((dx & 1) == 1) p += 3;
+                }
+            }
+
+            return Bitmap.createBitmap(bmp, w , h, Bitmap.Config.ARGB_8888);
+        }*/
+
     }
 
     private boolean checkPermissions(){
