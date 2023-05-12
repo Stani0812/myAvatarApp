@@ -15,6 +15,7 @@
 package com.google.codelab.mlkit;
 
 import android.Manifest;
+import android.app.Activity;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -95,7 +96,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.CAMERA
     };
-    //private ImageView mImageView;
+    private ImageView mImageView;
     private PreviewView mPreviewView;
     //private GraphicOverlay mGraphicOverlay;
     //private Bitmap mSelectedImage;
@@ -109,7 +110,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     /*** For CameraX ***/
     private Camera camera = null;
     private Preview preview = null;
-    //private ImageAnalysis imageAnalysis = null;
+    private ImageAnalysis imageAnalysis = null;
     private ExecutorService cameraExecutor = Executors.newSingleThreadExecutor();
 
     static {
@@ -135,7 +136,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //mImageView = findViewById(R.id.imageView);
+        mImageView = findViewById(R.id.imageView);
+        //mImageView.setScaleType(ImageView.ScaleType.CENTER);
         mPreviewView = findViewById(R.id.previewView);
         mPreviewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
         //mGraphicOverlay = findViewById(R.id.graphicOverlay);
@@ -365,13 +367,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 try {
                     ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
                     preview = new Preview.Builder().build();
-                    //imageAnalysis = new ImageAnalysis.Builder().build();
-                    //imageAnalysis.setAnalyzer(cameraExecutor, new MyImageAnalyzer());
+                    imageAnalysis = new ImageAnalysis.Builder().build();
+                    imageAnalysis.setAnalyzer(cameraExecutor, new MyImageAnalyzer());
                     CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build();
 
-                    //cameraProvider.unbindAll();
+                    cameraProvider.unbindAll();
                     camera = cameraProvider.bindToLifecycle((LifecycleOwner)context, cameraSelector, preview
-                                                            //, imageAnalysis
+                                                            , imageAnalysis
                                                             );
                     preview.setSurfaceProvider(mPreviewView.createSurfaceProvider(camera.getCameraInfo()));
                 } catch(Exception e) {
@@ -381,7 +383,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }, ContextCompat.getMainExecutor(this));
     }
 
-    /*private class MyImageAnalyzer implements ImageAnalysis.Analyzer {
+    private class MyImageAnalyzer implements ImageAnalysis.Analyzer {
         private Mat matPrevious = null;
 
         @Override
@@ -390,18 +392,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             Mat mat = fixMatRotation(matOrg);
 
-            Log.i(TAG, "[analyze] width = " + image.getWidth() + ", height = " + image.getHeight() + "Rotation = " + mPreviewView.getDisplay().getRotation());
-            Log.i(TAG, "[analyze] mat width = " + matOrg.cols() + ", mat height = " + matOrg.rows());
+            //Log.i(TAG, "[analyze] width = " + image.getWidth() + ", height = " + image.getHeight() + "Rotation = " + mPreviewView.getDisplay().getRotation());
+            //Log.i(TAG, "[analyze] mat width = " + matOrg.cols() + ", mat height = " + matOrg.rows());
 
             Mat matOutput = new Mat(mat.rows(), mat.cols(), mat.type());
-            if (matPrevious == null) matPrevious = mat;
+            if (matPrevious == null) {
+                matPrevious = mat;
+            }
             Core.absdiff(mat, matPrevious, matOutput);
             matPrevious = mat;
 
-            Imgproc.rectangle(matOutput, new Rect(10, 10, 100, 100), new Scalar(255, 0, 0));
-            Imgproc.putText(matOutput, "leftTop", new Point(10, 10), 1, 1, new Scalar(255, 0, 0));
+            //Imgproc.rectangle(matOutput, new Rect(10, 10, 100, 100), new Scalar(255, 0, 0));
+            //Imgproc.putText(matOutput, "leftTop", new Point(10, 10), 1, 1, new Scalar(255, 0, 0));
 
-            Bitmap bitmap = Bitmap.createBitmap(matOutput.cols(), matOutput.rows(),Bitmap.Config.ARGB_8888);
+            Bitmap bitmap = Bitmap.createBitmap(matOutput.cols(), matOutput.rows(), Bitmap.Config.ARGB_8888);
             Utils.matToBitmap(matOutput, bitmap);
 
             runOnUiThread(new Runnable() {
@@ -451,7 +455,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
             return mat;
         }
-    }*/
+    }
 
     private boolean checkPermissions(){
         for(String permission : REQUIRED_PERMISSIONS){
