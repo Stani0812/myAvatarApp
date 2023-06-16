@@ -22,12 +22,15 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.YuvImage;
 import android.graphics.Rect;
 import android.hardware.SensorListener;
+import android.hardware.camera2.CameraCharacteristics;
 import android.media.Image;
+import android.nfc.Tag;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
@@ -49,6 +52,7 @@ import android.os.PowerManager;
 import android.util.Pair;
 import android.view.Surface;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -74,6 +78,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -102,14 +108,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.CAMERA
     };
-    private ImageView mImageView;
+    static ImageView mVideoView;
     private PreviewView mPreviewView;
     private GraphicOverlay mGraphicOverlay;
     //private Bitmap mSelectedImage;
-    //private Integer mImageMaxWidth, mImageMaxHeight;
+    private Integer mImageMaxWidth, mImageMaxHeight;
     private SensorManager mSensorManagerP, mSensorManagerA, mSensorManagerO;
     private Sensor mProximity, mAccelerometer, mOrientation;
-    private TextView mAccelerometerInfo, mProximityInfo, mOrientationInfo;
+    private TextView mAccelerometerInfo, mProximityInfo, mOrientationInfo, mEyeSightInfo;
     //private PowerManager mPowerManager;
     //private PowerManager.WakeLock mWakeLock;
 
@@ -136,16 +142,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //private static final int DIM_IMG_SIZE_Y = 224;
     //private final PriorityQueue<Map.Entry<String, Float>> sortedLabels = new PriorityQueue<>(RESULTS_TO_SHOW, new Comparator<Map.Entry<String, Float>>() {@Override public int compare(Map.Entry<String, Float> o1, Map.Entry<String, Float> o2) {return (o1.getValue()).compareTo(o2.getValue());}});
 
+    private Timer timer;
+    private VideoTask videoTask;
+
     @SuppressLint({"InvalidWakeLockTag", "MissingInflatedId"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mImageView = findViewById(R.id.imageView);
-        //mImageView.setScaleType(ImageView.ScaleType.CENTER);
+        mVideoView = findViewById(R.id.videoView);
         mPreviewView = findViewById(R.id.previewView);
-        mPreviewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+        //mPreviewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
         mGraphicOverlay = findViewById(R.id.graphicOverlay);
 
         mSensorManagerP = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -154,11 +162,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         mProximity = mSensorManagerP.getDefaultSensor(Sensor.TYPE_PROXIMITY);
         mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-        mOrientation = mSensorManagerO.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+        //mOrientation = mSensorManagerO.getDefaultSensor(Sensor.TYPE_ORIENTATION);
 
         mProximityInfo = findViewById(R.id.textProximity);
         mAccelerometerInfo = findViewById(R.id.textLinearAcceleration);
-        mOrientationInfo = findViewById(R.id.textOrientation);
+        //mOrientationInfo = findViewById(R.id.textOrientation);
+
+        mEyeSightInfo = findViewById(R.id.textEyeSight);
 
         //mPowerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         //mWakeLock = mPowerManager.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "WakeLock");
@@ -170,14 +180,35 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Log.i(TAG, "[OnCreate] Request permissions");
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_FOR_PERMISSIONS);
         }
+
+        videoTask = new VideoTask(this);
+        timer = new Timer();
+        timer.scheduleAtFixedRate(videoTask, 1000, 15);
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
-    private void faceContourDetection(@NonNull Bitmap bitMap) {
-        InputImage image = InputImage.fromBitmap(bitMap, 0);
-
+    @Override
+    protected void onStop() {
+        if(videoTask!=null)
+        {
+            videoTask.close();
+            videoTask = null;
+        }
+        if(timer!=null)
+        {
+            timer.cancel();
+            timer = null;
+        }
+        super.onStop();
+    }
+    //private void faceContourDetection(@NonNull Bitmap bitMap) {
+    private void faceContourDetection(@NonNull InputImage image) {
+        //InputImage image = InputImage.fromBitmap(bitMap, 0);
         FaceDetectorOptions options =
                 new FaceDetectorOptions.Builder()
                         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
                         .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
                         .build();
 
@@ -187,6 +218,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         new OnSuccessListener<List<Face>>() {
                             @Override
                             public void onSuccess(List<Face> faces) {
+                                Log.i(TAG, "[faceContourDetection] Success faceContourDetection!");
                                 processFaceContourDetectionResult(faces);
                             }
                         })
@@ -194,6 +226,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         new OnFailureListener() {
                             @Override
                             public void onFailure(@NonNull Exception e) {
+                                Log.i(TAG, "[faceContourDetection] Fail faceContourDetection!");
                                 e.printStackTrace();
                             }
                         });
@@ -204,14 +237,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // Task completed successfully
         if (faces.size() == 0) {
             //showToast("No face found");
+            //Log.i(TAG, "[processFaceContourDetectionResult] No face found...");
             return;
         }
         mGraphicOverlay.clear();
         for (int i = 0; i < faces.size(); ++i) {
             Face face = faces.get(i);
             FaceContourGraphic faceGraphic = new FaceContourGraphic(mGraphicOverlay);
+            mGraphicOverlay.setCameraInfo(getImageMaxWidth(), getImageMaxHeight(), CameraCharacteristics.LENS_FACING_FRONT);
             mGraphicOverlay.add(faceGraphic);
+            Log.i(TAG, "[onCreate_mPreviewView]: " + getImageMaxWidth() + ", " + getImageMaxHeight());
+            Log.i(TAG, "[onCreate_mGraphicOverlay_after]: " + mGraphicOverlay.getWidth() + ", " + mGraphicOverlay.getHeight());
             faceGraphic.updateFace(face);
+            //Log.i(TAG, ""+face.getHeadEulerAngleX()+","+face.getHeadEulerAngleY()+","+face.getHeadEulerAngleZ());
+            judgeEyeSight(face.getHeadEulerAngleY());
+        }
+    }
+
+    private void judgeEyeSight(float y){
+        if (y < 20 && y > -20){
+            mEyeSightInfo.setText("EyeSight: " + y + " :: Watching now!!");
+            mEyeSightInfo.setTextColor(Color.RED);
+        }else{
+            mEyeSightInfo.setText("EyeSight: " + y + " :: Not watching now..");
+            mEyeSightInfo.setTextColor(Color.BLUE);
         }
     }
 
@@ -228,30 +277,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     // Functions for loading images from app assets.
 
     // Returns max image width, always for portrait mode. Caller needs to swap width / height for landscape mode.
-    /*private Integer getImageMaxWidth() {
+    private Integer getImageMaxWidth() {
         if (mImageMaxWidth == null) {
             // Calculate the max width in portrait mode. This is done lazily since we need to
             // wait for
             // a UI layout pass to get the right values. So delay it to first time image
             // rendering time.
-            mImageMaxWidth = mImageView.getWidth();
+            mImageMaxWidth = mPreviewView.getWidth();
         }
         return mImageMaxWidth;
-    }*/
+    }
 
     // Returns max image height, always for portrait mode. Caller needs to swap width / height for
     // landscape mode.
-    /*private Integer getImageMaxHeight() {
+    private Integer getImageMaxHeight() {
         if (mImageMaxHeight == null) {
             // Calculate the max width in portrait mode. This is done lazily since we need to
             // wait for
             // a UI layout pass to get the right values. So delay it to first time image
             // rendering time.
             mImageMaxHeight =
-                    mImageView.getHeight();
+                    mPreviewView.getHeight();
         }
         return mImageMaxHeight;
-    }*/
+    }
 
     // Gets the targeted width / height.
     /*private Pair<Integer, Integer> getTargetedWidthHeight() {
@@ -297,20 +346,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // Do nothing
     }*/
 
-    /*public static Bitmap getBitmapFromAsset(Context context, String filePath) {
-        AssetManager assetManager = context.getAssets();
-
-        InputStream is;
-        Bitmap bitmap = null;
+    private Bitmap getBitmapFromAsset(String strName)
+    {
+        AssetManager assetManager = getAssets();
+        InputStream istr = null;
         try {
-            is = assetManager.open(filePath);
-            bitmap = BitmapFactory.decodeStream(is);
+            istr = assetManager.open(strName);
         } catch (IOException e) {
             e.printStackTrace();
         }
-
+        Bitmap bitmap = BitmapFactory.decodeStream(istr);
         return bitmap;
-    }*/
+    }
 
     @Override
     protected void onResume() {
@@ -354,9 +401,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }else if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             mAccelerometerInfo.setText(arrayToString("ACC:", event.values));
-        }else if (event.sensor.getType() == Sensor.TYPE_ORIENTATION) {
+        }/*else if (event.sensor.getType() == Sensor.TYPE_ORIENTATION) {
             mOrientationInfo.setText(arrayToString("ORI: ",event.values));
-        }
+        }*/
     }
 
     @Override
@@ -377,9 +424,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     imageAnalysis = new ImageAnalysis.Builder().build();
                     imageAnalysis.setAnalyzer(cameraExecutor, new MyFaceImageAnalyzer());
                     CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build();
-
                     cameraProvider.unbindAll();
                     camera = cameraProvider.bindToLifecycle((LifecycleOwner)context, cameraSelector, preview, imageAnalysis);
+                    //Log.i(TAG, "[startCamera_cameraInfo]" + );
+                    //camera = cameraProvider.bindToLifecycle((LifecycleOwner)context, cameraSelector, preview);
                     preview.setSurfaceProvider(mPreviewView.createSurfaceProvider(camera.getCameraInfo()));
                 } catch(Exception e) {
                     Log.e(TAG, "[startCamera] Use case binding failed", e);
@@ -397,9 +445,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             Mat mat = fixMatRotation(matOrg);
 
-            //Log.i(TAG, "[analyze] width = " + image.getWidth() + ", height = " + image.getHeight() + "Rotation = " + mPreviewView.getDisplay().getRotation());
-            //Log.i(TAG, "[analyze] mat width = " + matOrg.cols() + ", mat height = " + matOrg.rows());
-
             Mat matOutput = new Mat(mat.rows(), mat.cols(), mat.type());
             if (matPrevious == null) {
                 matPrevious = mat;
@@ -407,16 +452,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Core.absdiff(mat, matPrevious, matOutput);
             matPrevious = mat;
 
-            //Imgproc.rectangle(matOutput, new Rect(10, 10, 100, 100), new Scalar(255, 0, 0));
-            //Imgproc.putText(matOutput, "leftTop", new Point(10, 10), 1, 1, new Scalar(255, 0, 0));
-
             Bitmap bitmap = Bitmap.createBitmap(matOutput.cols(), matOutput.rows(), Bitmap.Config.ARGB_8888);
             Utils.matToBitmap(matOutput, bitmap);
 
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mImageView.setImageBitmap(bitmap);
+                    //mImageView.setImageBitmap(bitmap);
+                    //mImageView.setImageBitmap(VideoTask.bitmap);
                 }
             });
 
@@ -464,23 +507,58 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private class MyFaceImageAnalyzer implements ImageAnalysis.Analyzer {
         @Override
-        public void analyze(@NonNull ImageProxy image) {
-            Bitmap bitMap = toBitmap(image);
+        public void analyze(@NonNull ImageProxy imageProxy) {
+            /*Bitmap bm = toBitmap(imageProxy);
+            Bitmap bm = getBitmapFromAsset("grace_hopper.jpg");
+            if (bm != null) {
+                // Get the dimensions of the View
+                Pair<Integer, Integer> targetedSize = getTargetedWidthHeight();
 
-            faceContourDetection(bitMap);
+                int targetWidth = targetedSize.first;
+                int maxHeight = targetedSize.second;
 
+                // Determine how much to scale down the image
+                float scaleFactor =
+                        Math.max(
+                                (float) bm.getWidth() / (float) targetWidth,
+                                (float) bm.getHeight() / (float) maxHeight);
+
+                Bitmap resizedBitmap =
+                        Bitmap.createScaledBitmap(
+                                bm,
+                                (int) (bm.getWidth() / scaleFactor),
+                                (int) (bm.getHeight() / scaleFactor),
+                                true);
+
+                //bm.setImageBitmap(resizedBitmap);
+                bm = resizedBitmap;
+            }
+            faceContourDetection(bm);*/
+            InputImage image;
+            @SuppressLint("UnsafeExperimentalUsageError") Image mediaImage = imageProxy.getImage();
+            if (mediaImage != null) {
+                image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+            }else{
+                Bitmap bm = getBitmapFromAsset("grace_hopper.jpg");
+                image = InputImage.fromBitmap(bm, 0);;
+            }
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mImageView.setImageBitmap(bitMap);
-                    //mImageView.setImageResource();
+                    faceContourDetection(image);
+                    //Bitmap bm = toBitmap(imageProxy);
+                    //mVideoView.setImageBitmap(bm);
                 }
             });
-
-            image.close();
+            try {
+                Thread.sleep(500);
+                imageProxy.close();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
 
-        private Bitmap toBitmap(ImageProxy image) {
+        /*private Bitmap toBitmap(ImageProxy image) {
             ImageProxy.PlaneProxy[] planes = image.getPlanes();
             ByteBuffer yBuffer = planes[0].getBuffer();
             ByteBuffer uBuffer = planes[1].getBuffer();
@@ -502,7 +580,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             byte[] imageBytes = out.toByteArray();
             return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
-        }
+        }*/
 
         /*private Bitmap YUV420_888toBitmap(ImageProxy image){
             int w = image.getWidth();
