@@ -1,5 +1,7 @@
 package com.google.codelab.mlkit;
 
+import static com.google.codelab.mlkit.MainActivity.getVolume;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Timer;
@@ -54,6 +56,7 @@ public class VideoTask extends TimerTask {
                         //((MainActivity)context).InvalidateScreen();
                         bitmap = BitmapFactory.decodeByteArray( packet.getData(), packet.getDataOffset(), packet.getDataLength() );
                         MainActivity.mVideoView.setImageBitmap(bitmap);
+                        MainActivity.mVolumeView.out(getVolume());
                         packet.removeRef( );
                     }
                     Thread.yield( );

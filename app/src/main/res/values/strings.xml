@@ -5,4 +5,8 @@
     <string name="find_face_contour_button">Find face contour</string>
     <string name="find_text_cloud_button">Find text (cloud)</string>
     <string name="find_objects_button">Find objects</string>
+    <string name="black_screen">Black Screen</string>
+    <string name="student_video">Student`s Video</string>
+    <string name="microphone">Microphone</string>
+
 </resources>

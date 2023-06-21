@@ -9,6 +9,65 @@
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
         android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toTopOf="@+id/videoView"
+        app:layout_constraintHorizontal_weight="0.8"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toLeftOf="@+id/micImageView"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_weight="0.3" />
+
+    <view class="com.google.codelab.mlkit.MainActivity$BlackView"
+        android:id="@+id/blackView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="2dp"
+        app:layout_constraintBottom_toTopOf="@+id/videoView"
+        app:layout_constraintHorizontal_weight="0.8"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toLeftOf="@+id/micImageView"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_weight="0.3"
+        android:contentDescription="@string/black_screen" />
+
+    <ImageView
+        android:id="@+id/micImageView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="2dp"
+        app:layout_constraintVertical_weight="0.3"
+        app:layout_constraintHorizontal_weight="0.2"
+        app:layout_constraintBottom_toTopOf="@+id/videoView"
+        app:layout_constraintLeft_toRightOf="@+id/previewView"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:contentDescription="@string/microphone" />
+
+    <view class="com.google.codelab.mlkit.MainActivity$VolumeView"
+        android:id="@+id/volumeView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintVertical_weight="0.3"
+        app:layout_constraintHorizontal_weight="0.2"
+        app:layout_constraintBottom_toTopOf="@+id/videoView"
+        app:layout_constraintLeft_toRightOf="@+id/previewView"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/videoView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintVertical_weight="0.7"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/previewView"
+        android:contentDescription="@string/student_video" />
+
+    <!--<androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         app:layout_constraintBottom_toTopOf="@+id/textProximity"
         app:layout_constraintLeft_toLeftOf="parent"
@@ -35,8 +94,8 @@
         app:layout_constraintTop_toTopOf="@id/previewView"
         app:layout_constraintVertical_bias="0.0" />
 
-        <!--app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintVertical_bias="0.0" />-->
+        &lt;!&ndash;app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintVertical_bias="0.0" />&ndash;&gt;
 
     <TextView
         android:id="@+id/textProximity"
@@ -65,14 +124,14 @@
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="parent" />
 
-    <!--<TextView
+    &lt;!&ndash;<TextView
         android:id="@+id/textOrientation"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintBottom_toTopOf="@+id/textLinearAcceleration"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="parent" />-->
+        app:layout_constraintTop_toBottomOf="parent" />&ndash;&gt;-->
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

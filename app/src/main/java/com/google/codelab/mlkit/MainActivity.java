@@ -15,27 +15,24 @@
 package com.google.codelab.mlkit;
 
 import android.Manifest;
-import android.app.Activity;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ImageFormat;
-import android.graphics.Matrix;
-import android.graphics.YuvImage;
-import android.graphics.Rect;
+import android.graphics.Paint;
 import android.hardware.SensorListener;
-import android.hardware.camera2.CameraCharacteristics;
 import android.media.Image;
-import android.nfc.Tag;
 import android.os.Bundle;
+import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
@@ -48,16 +45,10 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 
-import android.os.PowerManager;
-import android.util.Pair;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnFailureListener;
@@ -69,17 +60,12 @@ import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Timer;
-import java.util.TimerTask;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -94,28 +80,31 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.Point;
 //import org.opencv.core.Rect;
-import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener{
         //AdapterView.OnItemSelectedListener
     private static final String TAG = "MainActivity";
-    private int REQUEST_CODE_FOR_PERMISSIONS = 1234;;
+    private final int REQUEST_CODE_FOR_PERMISSIONS = 1234;
     private final String[] REQUIRED_PERMISSIONS = new String[]{
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.CAMERA
     };
     static ImageView mVideoView;
+    private ImageView mMicImageView;
     private PreviewView mPreviewView;
-    private GraphicOverlay mGraphicOverlay;
+    private BlackView mBlackView;
+    static VolumeView mVolumeView;
+    //private GraphicOverlay mGraphicOverlay;
     //private Bitmap mSelectedImage;
-    private Integer mImageMaxWidth, mImageMaxHeight;
+    private Bitmap Microphone;
+    private Integer mImageMaxWidth;
+    private Integer mImageMaxHeight;
     private SensorManager mSensorManagerP, mSensorManagerA, mSensorManagerO;
     private Sensor mProximity, mAccelerometer, mOrientation;
-    private TextView mAccelerometerInfo, mProximityInfo, mOrientationInfo, mEyeSightInfo;
+    //private TextView mAccelerometerInfo, mProximityInfo, mOrientationInfo, mEyeSightInfo;
     //private PowerManager mPowerManager;
     //private PowerManager.WakeLock mWakeLock;
 
@@ -151,10 +140,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Microphone  = getBitmapFromAsset("microphone.png");
+
         mVideoView = findViewById(R.id.videoView);
         mPreviewView = findViewById(R.id.previewView);
+        mMicImageView = findViewById(R.id.micImageView);
+        mMicImageView.setImageBitmap(Microphone);
+        mBlackView = findViewById(R.id.blackView);
+        mVolumeView = findViewById(R.id.volumeView);
+
         //mPreviewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
-        mGraphicOverlay = findViewById(R.id.graphicOverlay);
+        //mGraphicOverlay = findViewById(R.id.graphicOverlay);
 
         mSensorManagerP = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerA = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -164,11 +160,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
         //mOrientation = mSensorManagerO.getDefaultSensor(Sensor.TYPE_ORIENTATION);
 
-        mProximityInfo = findViewById(R.id.textProximity);
-        mAccelerometerInfo = findViewById(R.id.textLinearAcceleration);
+        //mProximityInfo = findViewById(R.id.textProximity);
+        //mAccelerometerInfo = findViewById(R.id.textLinearAcceleration);
         //mOrientationInfo = findViewById(R.id.textOrientation);
 
-        mEyeSightInfo = findViewById(R.id.textEyeSight);
+        //mEyeSightInfo = findViewById(R.id.textEyeSight);
 
         //mPowerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         //mWakeLock = mPowerManager.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "WakeLock");
@@ -186,6 +182,80 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         timer.scheduleAtFixedRate(videoTask, 1000, 15);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    public static class BlackView extends View {
+        private Paint paint;
+        private int alpha = 255;
+
+        public BlackView(Context context) {
+            super(context);
+        }
+
+        public BlackView(Context context, @Nullable AttributeSet attrs) {
+            super(context, attrs);
+            paint = new Paint();
+        }
+
+        public BlackView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+            super(context, attrs, defStyleAttr);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.BLACK);
+            paint.setAlpha(alpha);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
+        }
+
+        public void clear() {
+            alpha = 0;
+            invalidate();
+        }
+
+        public void out() {
+            alpha = 255;
+            invalidate();
+        }
+    }
+
+    public static class VolumeView extends View {
+        private Paint paint;
+        private double heightRatio = 0.3;
+        public VolumeView(Context context) {
+            super(context);
+        }
+
+        public VolumeView(Context context, @Nullable AttributeSet attrs) {
+            super(context, attrs);
+            paint = new Paint();
+        }
+
+        public VolumeView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+            super(context, attrs, defStyleAttr);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.GREEN);
+            canvas.drawRect(0, (float) (getHeight()/2 - heightRatio*127.5) + 25, getWidth(), getHeight()/2 + 25 , paint);
+        }
+
+        public void out(float ratio) {
+            heightRatio = ratio;
+            invalidate();
+        }
+    }
+
+    static float getVolume(){
+        float volume;
+        Random random = new Random();
+        volume = random.nextFloat();
+        return volume;
     }
 
     @Override
@@ -240,15 +310,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //Log.i(TAG, "[processFaceContourDetectionResult] No face found...");
             return;
         }
-        mGraphicOverlay.clear();
+        //mGraphicOverlay.clear();
         for (int i = 0; i < faces.size(); ++i) {
             Face face = faces.get(i);
-            FaceContourGraphic faceGraphic = new FaceContourGraphic(mGraphicOverlay);
-            mGraphicOverlay.setCameraInfo(getImageMaxWidth(), getImageMaxHeight(), CameraCharacteristics.LENS_FACING_FRONT);
-            mGraphicOverlay.add(faceGraphic);
-            Log.i(TAG, "[onCreate_mPreviewView]: " + getImageMaxWidth() + ", " + getImageMaxHeight());
-            Log.i(TAG, "[onCreate_mGraphicOverlay_after]: " + mGraphicOverlay.getWidth() + ", " + mGraphicOverlay.getHeight());
-            faceGraphic.updateFace(face);
+            //FaceContourGraphic faceGraphic = new FaceContourGraphic(mGraphicOverlay);
+            //mGraphicOverlay.setCameraInfo(getImageMaxWidth(), getImageMaxHeight(), CameraCharacteristics.LENS_FACING_FRONT);
+            //mGraphicOverlay.add(faceGraphic);
+            //Log.i(TAG, "[onCreate_mPreviewView]: " + getImageMaxWidth() + ", " + getImageMaxHeight());
+            //Log.i(TAG, "[onCreate_mGraphicOverlay_after]: " + mGraphicOverlay.getWidth() + ", " + mGraphicOverlay.getHeight());
+            //faceGraphic.updateFace(face);
             //Log.i(TAG, ""+face.getHeadEulerAngleX()+","+face.getHeadEulerAngleY()+","+face.getHeadEulerAngleZ());
             judgeEyeSight(face.getHeadEulerAngleY());
         }
@@ -256,11 +326,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private void judgeEyeSight(float y){
         if (y < 20 && y > -20){
-            mEyeSightInfo.setText("EyeSight: " + y + " :: Watching now!!");
-            mEyeSightInfo.setTextColor(Color.RED);
+            //mEyeSightInfo.setText("EyeSight: " + y + " :: Watching now!!");
+            //mEyeSightInfo.setTextColor(Color.RED);
+            mBlackView.clear();
         }else{
-            mEyeSightInfo.setText("EyeSight: " + y + " :: Not watching now..");
-            mEyeSightInfo.setTextColor(Color.BLUE);
+            //mEyeSightInfo.setText("EyeSight: " + y + " :: Not watching now..");
+            //mEyeSightInfo.setTextColor(Color.BLUE);
+            mBlackView.out();
         }
     }
 
@@ -283,7 +355,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             // wait for
             // a UI layout pass to get the right values. So delay it to first time image
             // rendering time.
-            mImageMaxWidth = mPreviewView.getWidth();
+            mImageMaxWidth = mMicImageView.getWidth();
         }
         return mImageMaxWidth;
     }
@@ -297,7 +369,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             // a UI layout pass to get the right values. So delay it to first time image
             // rendering time.
             mImageMaxHeight =
-                    mPreviewView.getHeight();
+                    mMicImageView.getHeight();
         }
         return mImageMaxHeight;
     }
@@ -389,18 +461,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
             //event.values[0]=0 or 5.000025.
             if (event.values[0] > 2.0) {
-                mProximityInfo.setText("PRO: far " + Arrays.toString(event.values));
+                //mProximityInfo.setText("PRO: far " + Arrays.toString(event.values));
                 /*if (mWakeLock.isHeld()) {
                     //mWakeLock.release();
                 }*/
             } else{
-                mProximityInfo.setText("PRO: near " + Arrays.toString(event.values));
+                //mProximityInfo.setText("PRO: near " + Arrays.toString(event.values));
                 /*if (!mWakeLock.isHeld()) {
                     //mWakeLock.acquire();
                 }*/
             }
         }else if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            mAccelerometerInfo.setText(arrayToString("ACC:", event.values));
+            //mAccelerometerInfo.setText(arrayToString("ACC:", event.values));
         }/*else if (event.sensor.getType() == Sensor.TYPE_ORIENTATION) {
             mOrientationInfo.setText(arrayToString("ORI: ",event.values));
         }*/
