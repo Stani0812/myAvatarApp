@@ -1,0 +1,1 @@
+C:\Users\souta\MyVSCode\mlkit-android-master\vision\starter\mysdk\build\intermediates\cxx\Debug\1vz546g2\obj\x86
