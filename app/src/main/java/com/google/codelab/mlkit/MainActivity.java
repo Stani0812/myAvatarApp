@@ -223,7 +223,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     public static class VolumeView extends View {
         private Paint paint;
-        private double heightRatio = 0.3;
+        private double heightRatio = 0.7;
         public VolumeView(Context context) {
             super(context);
         }
@@ -255,6 +255,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float volume;
         Random random = new Random();
         volume = random.nextFloat();
+        //Log.i(TAG,"[getVolume]: " + volume);
         return volume;
     }
 
@@ -308,6 +309,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (faces.size() == 0) {
             //showToast("No face found");
             //Log.i(TAG, "[processFaceContourDetectionResult] No face found...");
+            mBlackView.out();
             return;
         }
         //mGraphicOverlay.clear();
@@ -618,6 +620,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 @Override
                 public void run() {
                     faceContourDetection(image);
+                    float v = getVolume();
+                    mVolumeView.out(v);
                     //Bitmap bm = toBitmap(imageProxy);
                     //mVideoView.setImageBitmap(bm);
                 }

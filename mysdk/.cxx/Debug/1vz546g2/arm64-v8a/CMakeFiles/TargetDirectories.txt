@@ -1,0 +1,3 @@
+C:/Users/souta/MyVSCode/mlkit-android-master/vision/starter/mysdk/.cxx/Debug/1vz546g2/arm64-v8a/CMakeFiles/opencv_jni_shared.dir
+C:/Users/souta/MyVSCode/mlkit-android-master/vision/starter/mysdk/.cxx/Debug/1vz546g2/arm64-v8a/CMakeFiles/edit_cache.dir
+C:/Users/souta/MyVSCode/mlkit-android-master/vision/starter/mysdk/.cxx/Debug/1vz546g2/arm64-v8a/CMakeFiles/rebuild_cache.dir
