@@ -63,6 +63,7 @@ import com.google.mlkit.vision.face.FaceDetectorOptions;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Timer;
 import java.util.Random;
@@ -92,6 +93,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.CAMERA
     };
+
+    protected final static double RAD2DEG = 180/Math.PI;
     static ImageView mVideoView;
     private ImageView mMicImageView;
     private PreviewView mPreviewView;
@@ -102,9 +105,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Bitmap Microphone;
     private Integer mImageMaxWidth;
     private Integer mImageMaxHeight;
-    private SensorManager mSensorManagerP, mSensorManagerA, mSensorManagerO;
-    private Sensor mProximity, mAccelerometer, mOrientation;
-    //private TextView mAccelerometerInfo, mProximityInfo, mOrientationInfo, mEyeSightInfo;
+    private SensorManager mSensorManagerP, mSensorManagerA, mSensorManagerO, mSensorManagerG, mSensorManagerGU;
+    private Sensor mProximity, mAccelerometer, mOrientation, mGyro, mGyroU;
+    private TextView mSensorInfo, mAccelerometerInfo, mProximityInfo, mOrientationInfo, mEyeSightInfo, mGyroInfo, mGyroUInfo;
     //private PowerManager mPowerManager;
     //private PowerManager.WakeLock mWakeLock;
 
@@ -155,19 +158,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mSensorManagerP = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerA = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorManagerO = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mSensorManagerG = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mSensorManagerGU = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 
         mProximity = mSensorManagerP.getDefaultSensor(Sensor.TYPE_PROXIMITY);
         mAccelerometer = mSensorManagerA.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        mGyro = mSensorManagerG.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        mGyroU = mSensorManagerGU.getDefaultSensor(Sensor.TYPE_GYROSCOPE_UNCALIBRATED);
         //mOrientation = mSensorManagerO.getDefaultSensor(Sensor.TYPE_ORIENTATION);
-
         //mProximityInfo = findViewById(R.id.textProximity);
         //mAccelerometerInfo = findViewById(R.id.textLinearAcceleration);
         //mOrientationInfo = findViewById(R.id.textOrientation);
-
+        mSensorInfo = findViewById(R.id.textSensor);
         //mEyeSightInfo = findViewById(R.id.textEyeSight);
 
         //mPowerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         //mWakeLock = mPowerManager.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "WakeLock");
+
 
         if (checkPermissions()) {
             Log.i(TAG, "[OnCreate] Get permissions!");
@@ -182,6 +189,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         timer.scheduleAtFixedRate(videoTask, 1000, 15);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
     }
 
     public static class BlackView extends View {
@@ -349,7 +358,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     // Functions for loading images from app assets.
-
     // Returns max image width, always for portrait mode. Caller needs to swap width / height for landscape mode.
     private Integer getImageMaxWidth() {
         if (mImageMaxWidth == null) {
@@ -439,14 +447,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mSensorManagerP.registerListener((SensorEventListener) this, mProximity, SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManagerA.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManagerO.registerListener((SensorEventListener) this, mOrientation, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManagerG.registerListener((SensorEventListener) this, mGyro, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManagerGU.registerListener((SensorEventListener) this, mGyroU, SensorManager.SENSOR_DELAY_NORMAL);
+
+        Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (accelerometer != null) {
+            sensorManager.registerListener(this, accelerometer,
+                    SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
+        }
+        Sensor magneticField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        if (magneticField != null) {
+            sensorManager.registerListener(this, magneticField,
+                    SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        mSensorManagerP.unregisterListener((SensorListener) this);
-        mSensorManagerA.unregisterListener((SensorListener) this);
-        mSensorManagerO.unregisterListener((SensorListener) this);
+        mSensorManagerP.unregisterListener(this);
+        mSensorManagerA.unregisterListener(this);
+        mSensorManagerO.unregisterListener(this);
+        mSensorManagerG.unregisterListener(this);
+        mSensorManagerGU.unregisterListener(this);
+        sensorManager.unregisterListener(this);
     }
 
     private static String arrayToString( String str, float[] values ) {
@@ -463,21 +487,37 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
             //event.values[0]=0 or 5.000025.
             if (event.values[0] > 2.0) {
+                //Log.i(TAG, "PRO: far -- " + Arrays.toString(event.values));
                 //mProximityInfo.setText("PRO: far " + Arrays.toString(event.values));
                 /*if (mWakeLock.isHeld()) {
                     //mWakeLock.release();
                 }*/
-            } else{
+            } else {
+                //Log.i(TAG, "PRO: near -- " + Arrays.toString(event.values));
                 //mProximityInfo.setText("PRO: near " + Arrays.toString(event.values));
                 /*if (!mWakeLock.isHeld()) {
                     //mWakeLock.acquire();
                 }*/
             }
-        }else if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            //mAccelerometerInfo.setText(arrayToString("ACC:", event.values));
-        }/*else if (event.sensor.getType() == Sensor.TYPE_ORIENTATION) {
-            mOrientationInfo.setText(arrayToString("ORI: ",event.values));
-        }*/
+        } else if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            //Log.i(TAG, "ACC: -- " + Arrays.toString(event.values));
+            //mSensorInfo.setText(arrayToString("ACC:", event.values));
+        } else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            //Log.i(TAG, "GYRO: -- " + Arrays.toString(event.values));
+            //mGyroInfo.setText(arrayToString("GYRO: ", event.values));
+        } else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE_UNCALIBRATED) {
+            //Log.i(TAG, "GYRO_UNCALIBRATED: -- " + Arrays.toString(event.values));
+            //mSensorInfo.setText(arrayToString("GYRO_U: ", event.values));
+        } else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, accelerometerReading,
+                    0, accelerometerReading.length);
+        } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            System.arraycopy(event.values, 0, magnetometerReading,
+                    0, magnetometerReading.length);
+        }
+
+        updateOrientationAngles();
+        mSensorInfo.setText("ORI_ANG : " +  (int)(orientationAngles[0]*RAD2DEG) + ", " +  (int)(orientationAngles[1]*RAD2DEG) + ", " +  (int)(orientationAngles[2]*RAD2DEG));
     }
 
     @Override
@@ -752,5 +792,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 this.finish();
             }
         }
+    }
+
+    private SensorManager sensorManager;
+    private final float[] accelerometerReading = new float[3];
+    private final float[] magnetometerReading = new float[3];
+    private final float[] rotationMatrix = new float[9];
+    private final float[] orientationAngles = new float[3];
+
+    public void updateOrientationAngles() {
+        // Update rotation matrix, which is needed to update orientation angles.
+        SensorManager.getRotationMatrix(rotationMatrix, null,
+                accelerometerReading, magnetometerReading);
+
+        // "mRotationMatrix" now has up-to-date information.
+
+        SensorManager.getOrientation(rotationMatrix, orientationAngles);
+
+        // "mOrientationAngles" now has up-to-date information.
     }
 }
